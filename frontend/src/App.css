@@ -1,0 +1,235 @@
+/* App.css - Dark iMessage-like UI */
+
+/* Reset body margin/padding */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Outer container: black background */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #000;
+}
+
+/* Center chat area, white text by default */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 600px;
+  color: #fff;
+  position: relative;
+  height: 100%;
+}
+
+/* Optional top-right time (uncomment in App.js) */
+.header-time {
+  text-align: right;
+  margin: 0.5rem 1rem;
+  color: #8e8e93;
+}
+
+/* Scrollable area for messages */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+/* Each message row */
+.message-wrapper {
+  display: flex;
+  margin: 6px 0;
+  width: 100%;
+  align-items: flex-end;
+}
+
+/* Align user (outgoing) messages to the right */
+.user-message {
+  justify-content: flex-end;
+}
+
+/* Align bot (incoming) messages to the left */
+.bot-message {
+  justify-content: flex-start;
+}
+
+/* Bubble styling */
+.message-content {
+  position: relative;
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  font-size: 16px;
+  line-height: 1.4;
+  display: inline-block;
+  margin-bottom: 2px;
+}
+
+/* Outgoing bubble: iMessage blue */
+.user-message .message-content {
+  background-color: #0a84ff;
+  color: #fff;
+}
+
+/* Incoming bubble: dark gray */
+.bot-message .message-content {
+  background-color: #3a3a3c;
+  color: #fff;
+}
+
+/* Tail for incoming bubble */
+.bot-message .message-content::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 10px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-right: 6px solid #3a3a3c;
+  border-bottom: 6px solid transparent;
+}
+
+/* Tail for outgoing bubble */
+.user-message .message-content::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 10px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-left: 6px solid #0a84ff;
+  border-bottom: 6px solid transparent;
+}
+
+/* Timestamp under message text */
+.message-time {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  color: #8e8e93; /* default for bot side; override below for user */
+}
+
+/* Make user’s timestamp and read receipt white */
+.user-message .message-time,
+.user-message .read-receipt {
+  color: #ffffff;
+}
+
+/* "Read" label for user messages */
+.read-receipt {
+  font-size: 0.7rem;
+  margin-left: 4px;
+  display: block; /* or inline-block if desired */
+}
+
+/* Typing indicator bubble (like incoming) */
+.typing-indicator-bubble {
+  position: relative;
+  max-width: 45%;
+  background-color: #3a3a3c;
+  color: #fff;
+  border-radius: 18px;
+  padding: 10px 14px;
+  margin: 6px 0;
+}
+
+.typing-indicator-bubble::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 10px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-right: 6px solid #3a3a3c;
+  border-bottom: 6px solid transparent;
+}
+
+/* Animated 3-dot "typing" */
+.typing-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background-color: #fff;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) {
+  animation-delay: 0s;
+}
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* Smaller, centered input bar at bottom */
+.input-container {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 500px;
+  background-color: #1c1c1e;
+  border: 1px solid #3a3a3c;
+  border-radius: 20px;
+  padding: 0.4rem 0.8rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Input + send button side-by-side */
+.input-container form {
+  display: flex;
+  width: 100%;
+  align-items: center;
+}
+
+.input-container input {
+  flex: 1;
+  margin-right: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 15px;
+  border: none;
+  background-color: #3a3a3c;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+/* Send button */
+.send-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #0a84ff;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

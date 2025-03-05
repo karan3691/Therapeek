@@ -1,0 +1,56 @@
+# Core dependencies
+transformers>=4.36.0
+torch>=2.1.0
+bitsandbytes>=0.41.0
+accelerate>=0.24.0
+peft>=0.7.0
+sentencepiece>=0.1.99
+safetensors>=0.4.0
+faiss-cpu>=1.7.4
+llama-cpp-python>=0.2.0
+
+# API dependencies
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+starlette>=0.27.0
+typing-extensions>=4.8.0
+
+# Model optimization
+onnx>=1.15.0
+onnxruntime>=1.16.0
+optimum>=1.13.0
+
+# Emotion detection and safety
+transformers[sentencepiece]>=4.36.0
+torch>=2.1.0
+sentence-transformers>=2.2.2
+detoxify>=0.5.1
+
+# Memory and context management
+faiss-cpu>=1.7.4
+numpy>=1.23.5,<2.0.0
+scikit-learn>=1.3.0
+
+# Data processing
+nltk>=3.8.1
+regex>=2023.10.3
+pandas>=2.1.0
+tqdm>=4.66.0
+fsspec>=2023.1.0,<=2023.10.0
+
+# Database
+pymongo>=4.6.0
+motor>=3.3.0
+beanie>=1.23.0
+
+# Development and testing
+pytest>=7.4.0
+black>=23.10.0
+flake8>=6.1.0
+isort>=5.12.0
+
+# Hugging Face integration
+huggingface-hub>=0.19.0
+wandb>=0.15.0
