@@ -34,28 +34,23 @@ therapeek/
    python data/download_dataset.py
    ```
 
-2. Download and preprocess the Gen Z conversation dataset:
-   ```bash
-   python data/download_genz_dataset.py
-   ```
-
-3. Preprocess and combine all datasets:
+2. Preprocess and combine all datasets:
    ```bash
    python data/preprocess.py
    ```
 
-4. Fine-tune the Zephyr-7B model:
+3. Fine-tune the Zephyr-7B model:
    ```bash
    python model/finetune_zephyr.py
    ```
    > Note: This step requires significant computational resources. Consider using a cloud GPU service if your local machine has limited resources.
 
-5. Quantize the model for efficient inference:
+4. Quantize the model for efficient inference:
    ```bash
    python model/quantize.py
    ```
 
-6. Evaluate the model performance:
+5. Evaluate the model performance:
    ```bash
    python model/evaluate.py
    ```
