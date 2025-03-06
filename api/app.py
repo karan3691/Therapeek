@@ -18,15 +18,22 @@ from utils import genzify_response, is_mental_health_query
 os.makedirs(os.path.dirname(os.path.abspath(__file__)), exist_ok=True)
 
 # Initialize FastAPI app
-app = FastAPI(title="TheraPeek API", description="Gen Z Mental Health Chatbot API")
+app = FastAPI(
+    title="TheraPeek API",
+    description="Gen Z Mental Health Chatbot API",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
-# Enable CORS
+# Enable CORS with specific origins for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    max_age=600
 )
 
 # Global variables
@@ -43,31 +50,95 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     user_id: Optional[str] = None
 
+    class Config:
+        schema_extra = {
+            "example": {
+                "message": "I'm feeling anxious about my exams",
+                "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                "user_id": "user123"
+            }
+        }
+
 class ChatResponse(BaseModel):
     response: str
     emotion: str
     conversation_id: str
+    timestamp: str
+    message_id: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "response": "I understand exam anxiety can be tough. Let's talk about it!",
+                "emotion": "empathetic",
+                "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                "timestamp": "2024-01-20T15:30:00Z",
+                "message_id": "msg123"
+            }
+        }
+
+class ErrorResponse(BaseModel):
+    error: str
+    detail: Optional[str] = None
+    status_code: int
 
 def optimize_memory():
-    """Optimize memory usage for machines with limited RAM."""
-    gc.collect()
+    """Optimize memory usage for machines with limited RAM (8GB)."""
+    gc.collect(2)
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
     
-    # Clear old conversations periodically
-    current_time = time.time()
-    for conv_id in list(conversation_store.keys()):
-        if current_time - float(conv_id) > 3600:  # Remove conversations older than 1 hour
-            del conversation_store[conv_id]
+    process = psutil.Process(os.getpid())
+    current_memory = process.memory_info().rss / 1024 / 1024
+    print(f"Current memory usage: {current_memory:.2f} MB")
+    
+    if torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(0.5)
+    
+    if current_memory > 3500:
+        print("WARNING: High memory usage detected. Performing aggressive cleanup...")
+        for i in range(3):
+            gc.collect(i)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        
+        if platform.system() == "Darwin":
+            try:
+                import ctypes
+                lib = ctypes.CDLL("libSystem.B.dylib")
+                lib.malloc_trim(0)
+            except Exception:
+                pass
+        
+        if current_memory > 5000:
+            print("CRITICAL: Memory usage high. Pausing to free memory...")
+            import time
+            time.sleep(3)
+            gc.collect(2)
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Convert fine-tuned Zephyr model to GGUF format')
+    parser.add_argument('--model_path', type=str, default='output/zephyr_7b_finetuned',
+                        help='Path to the fine-tuned model directory')
+    parser.add_argument('--output_path', type=str, default='zephyr-7b-q4.gguf',
+                        help='Path for the output GGUF file')
+    parser.add_argument('--quantization', type=str, default='q4_0',
+                        help='Quantization type (q4_0, q4_1, q5_0, q5_1, q8_0)')
+    return parser.parse_args()
 
 def load_models():
-    """Load Zephyr-3B model, emotion classifier, and initialize FAISS index."""
+    """Load Zephyr-7B model, emotion classifier, and initialize FAISS index."""
     global model, tokenizer, emotion_classifier, faiss_index, sentence_encoder
     
     try:
-        # Load Zephyr-3B model using llama.cpp with optimized settings
+        # Load Zephyr-7B model using llama.cpp with optimized settings
         model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                                "model", "zephyr-3b-q4.gguf")
+                                "model", "zephyr-7b-q4.gguf")
         model = Llama(model_path=model_path, n_ctx=2048, n_threads=4, n_batch=512)
         
         # Load emotion classifier with optimized batch size
@@ -121,7 +192,7 @@ async def chat(request: ChatRequest):
                 if idx < len(context):
                     context.insert(0, context[idx])
         
-        # Generate response using Zephyr-3B with optimized prompt
+        # Generate response using Zephyr-7B with optimized prompt
         prompt = f"Previous context: {json.dumps(context[-3:])}"
         prompt += f"\nUser emotion: {detected_emotion}"
         prompt += f"\nUser: {request.message}"

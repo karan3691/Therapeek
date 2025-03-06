@@ -95,9 +95,9 @@ def optimize_onnx_model(onnx_path, optimized_path):
     from onnxruntime.transformers import optimizer
     optimized_model = optimizer.optimize_model(
         onnx_path,
-        model_type='gpt2',  # DialoGPT is based on GPT-2
-        num_heads=12,
-        hidden_size=768
+        model_type='llama',  # Zephyr is based on Llama architecture
+        num_heads=32,        # Zephyr-7B has 32 attention heads
+        hidden_size=4096     # Zephyr-7B hidden size
     )
     
     # Save the optimized model
@@ -376,21 +376,21 @@ if __name__ == "__main__":
     # Define file paths
     model_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(model_dir, "output")
-    fine_tuned_model_path = os.path.join(model_dir, "fine_tuned_dialogpt")
+    fine_tuned_model_path = os.path.join(output_dir, "zephyr_7b_finetuned")
     
-    print("\n===== TheraPeek Model Quantization =====\n")
+    print("\n===== TheraPeek Zephyr-7B Model Quantization =====\n")
     print(f"Current directory: {os.getcwd()}")
     print(f"Model directory: {model_dir}")
     
-    # If model doesn't exist in the direct path, use the one in output directory
+    # If model doesn't exist in the output directory, check the direct path
     if not os.path.exists(os.path.join(fine_tuned_model_path, "config.json")):
-        print(f"Model not found at {fine_tuned_model_path}, checking output directory...")
-        fine_tuned_model_path = os.path.join(output_dir, "fine_tuned_dialogpt")
-        print(f"Looking for model in output directory: {fine_tuned_model_path}")
+        print(f"Model not found in output directory, checking direct path...")
+        fine_tuned_model_path = os.path.join(model_dir, "zephyr_7b_finetuned")
+        print(f"Looking for model at: {fine_tuned_model_path}")
     
-    onnx_model_path = os.path.join(model_dir, "therapeek_model.onnx")
-    optimized_model_path = os.path.join(model_dir, "therapeek_model_optimized.onnx")
-    quantized_model_path = os.path.join(model_dir, "therapeek_model_quantized.onnx")
+    onnx_model_path = os.path.join(model_dir, "zephyr_7b.onnx")
+    optimized_model_path = os.path.join(model_dir, "zephyr_7b_optimized.onnx")
+    quantized_model_path = os.path.join(model_dir, "zephyr_7b_quantized.onnx")
     
     print(f"ONNX model path: {onnx_model_path}")
     print(f"Optimized model path: {optimized_model_path}")

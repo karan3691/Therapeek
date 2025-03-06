@@ -4,11 +4,11 @@ from llama_cpp import Llama
 import time
 
 # Path to the GGUF model
-MODEL_PATH = 'model/zephyr-3b-q4.gguf'
+MODEL_PATH = 'model/zephyr-7b-q4.gguf'
 
 def validate_zephyr_model():
-    """Test the Zephyr-3B model with sample mental health queries."""
-    print("\nValidating Zephyr-3B model...")
+    """Test the Zephyr-7B model with sample mental health queries."""
+    print("\nValidating Zephyr-7B model...")
     
     # Check if model exists
     if not os.path.exists(MODEL_PATH):
@@ -110,7 +110,7 @@ def test_memory_usage():
         return False
 
 if __name__ == '__main__':
-    print("Zephyr-3B Model Test Utility")
+    print("Zephyr-7B Model Test Utility")
     print("===========================")
     
     # Validate the model
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     
     print("\nTest complete!")
     if model_valid:
-        print("The Zephyr-3B model is working correctly and ready for use with the API.")
+        print("The Zephyr-7B model is working correctly and ready for use with the API.")
         print("Next step: Run 'python api/app.py' to start the FastAPI server")
     else:
-        print("There were issues with the Zephyr-3B model. Please check the errors above.")
+        print("There were issues with the Zephyr-7B model. Please check the errors above.")

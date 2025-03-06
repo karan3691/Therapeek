@@ -81,6 +81,28 @@ body {
 .bot-message .message-content {
   background-color: #3a3a3c;
   color: #fff;
+  transition: all 0.3s ease;
+}
+
+/* Emotion-based message styling */
+.bot-message.empathetic .message-content {
+  background-color: #4a90e2;
+  border: 1px solid #6aa9f4;
+}
+
+.bot-message.supportive .message-content {
+  background-color: #50b36e;
+  border: 1px solid #6cc688;
+}
+
+.bot-message.concerned .message-content {
+  background-color: #e2984a;
+  border: 1px solid #f4b66a;
+}
+
+.bot-message.error .message-content {
+  background-color: #e24a4a;
+  border: 1px solid #f46a6a;
 }
 
 /* Tail for incoming bubble */

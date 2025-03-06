@@ -4,7 +4,9 @@ import numpy as np
 import re
 import nltk
 import gc
-from nltk.tokenize import word_tokenize
+import torch
+import psutil
+import platform
 from tqdm import tqdm
 
 # Download necessary NLTK resources
@@ -13,190 +15,96 @@ try:
 except LookupError:
     nltk.download('punkt')
 
+def optimize_memory():
+    """Optimize memory usage for machines with limited RAM (8GB)."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    
+    process = psutil.Process(os.getpid())
+    current_memory = process.memory_info().rss / 1024 / 1024
+    print(f"Current memory usage: {current_memory:.2f} MB")
+    
+    if current_memory > 3500:
+        print("WARNING: High memory usage detected. Performing aggressive cleanup...")
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+
 def clean_text(text):
     """
-    Clean and normalize text data.
+    Cleans and normalizes text data.
     """
     if not isinstance(text, str):
         return ""
     
-    # Convert to lowercase
-    text = text.lower()
-    
-    # Remove URLs
-    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-    
-    # Remove special characters and numbers but keep emoticons and important punctuation
-    text = re.sub(r'[^\w\s\?\!\.,:\)\(\-]', '', text)
-    
-    # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = text.lower()  # Convert to lowercase
+    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)  # Remove URLs
+    text = re.sub(r'[^\w\s\?\!\.,:\)\(\-]', '', text)  # Remove special characters (but keep punctuation)
+    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra whitespace
     
     return text
 
-def preprocess_mental_health_dataset(file_path):
+def preprocess_dataset(file_path, input_col, response_col):
     """
-    Preprocess the Mental Health Conversational dataset.
+    Generic function to preprocess any dataset.
+    Handles different column name mappings for various datasets.
     """
-    print(f"Preprocessing {file_path}...")
-    
-    try:
-        # Load dataset
-        df = pd.read_csv(file_path)
-        
-        # Check if required columns exist
-        required_columns = ['question', 'answer']
-        if not all(col in df.columns for col in required_columns):
-            print(f"Error: Dataset missing required columns. Found: {df.columns.tolist()}")
-            return None
-        
-        # Clean text
-        print("Cleaning text data...")
-        df['clean_question'] = df['question'].apply(clean_text)
-        df['clean_answer'] = df['answer'].apply(clean_text)
-        
-        # Remove rows with empty questions or answers
-        df = df[df['clean_question'].str.len() > 0]
-        df = df[df['clean_answer'].str.len() > 0]
-        
-        # Create conversation pairs
-        conversations = []
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating conversation pairs"):
-            conversations.append({
-                'input': row['clean_question'],
-                'response': row['clean_answer']
-            })
-        
-        print(f"Processed {len(conversations)} conversation pairs")
-        return conversations
-    
-    except Exception as e:
-        print(f"Error preprocessing dataset: {e}")
+    if not os.path.exists(file_path):
+        print(f"Skipping: {file_path} not found.")
         return None
-
-def preprocess_human_conversation_dataset(file_path):
-    """
-    Preprocess the Human Conversation dataset.
-    """
+    
     print(f"Preprocessing {file_path}...")
     
     try:
-        # Load dataset
         df = pd.read_csv(file_path)
         
-        # Check if required columns exist
-        required_columns = ['input', 'response']
-        if not all(col in df.columns for col in required_columns):
-            print(f"Error: Dataset missing required columns. Found: {df.columns.tolist()}")
+        # Define column mappings for different datasets
+        column_mappings = {
+            'text': ('text', None),  # For mental_health_conversational.csv
+            'Context': ('Context', 'Response'),  # For mental_health_counseling_conversations.csv
+            'context': ('context', 'response'),  # For mental_health_counseling_rated.csv
+            'question': ('question', 'response_j')  # For psychology_dataset.csv
+        }
+        
+        # Detect and apply appropriate column mapping
+        applied_mapping = None
+        for key, (in_col, out_col) in column_mappings.items():
+            if key in df.columns:
+                if key == 'text':
+                    # Special handling for text column that contains both input and response
+                    df['input'] = df['text'].apply(lambda x: x.split('<ASSISTANT>:')[0].replace('<HUMAN>:', '').strip() if isinstance(x, str) else '')
+                    df['response'] = df['text'].apply(lambda x: x.split('<ASSISTANT>:')[1].strip() if isinstance(x, str) and '<ASSISTANT>:' in x else '')
+                else:
+                    df['input'] = df[in_col]
+                    df['response'] = df[out_col] if out_col else ''
+                applied_mapping = (in_col, out_col)
+                break
+        
+        if applied_mapping is None:
+            print(f"Error: {file_path} has unsupported column format. Found: {df.columns.tolist()}")
             return None
         
-        # Clean text
-        print("Cleaning text data...")
-        df['clean_input'] = df['input'].apply(clean_text)
-        df['clean_response'] = df['response'].apply(clean_text)
-        
-        # Remove rows with empty inputs or responses
-        df = df[df['clean_input'].str.len() > 0]
-        df = df[df['clean_response'].str.len() > 0]
-        
-        # Create conversation pairs
-        conversations = []
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating conversation pairs"):
-            conversations.append({
-                'input': row['clean_input'],
-                'response': row['clean_response']
-            })
-        
-        print(f"Processed {len(conversations)} conversation pairs")
-        return conversations
-    
-    except Exception as e:
-        print(f"Error preprocessing dataset: {e}")
-        return None
-
-def preprocess_reddit_dataset(file_path):
-    """
-    Preprocess the Reddit Mental Health Support dataset.
-    """
-    print(f"Preprocessing {file_path}...")
-    
-    try:
-        # Load dataset
-        df = pd.read_csv(file_path)
-        
-        # Check columns and adapt based on actual structure
-        if 'post' in df.columns and 'comment' in df.columns:
-            input_col, response_col = 'post', 'comment'
-        elif 'title' in df.columns and 'selftext' in df.columns and 'comment' in df.columns:
-            # Combine title and selftext for input
-            df['input'] = df['title'] + " " + df['selftext'].fillna('')
-            input_col, response_col = 'input', 'comment'
-        else:
-            print(f"Error: Unexpected column structure. Found: {df.columns.tolist()}")
-            return None
-        
-        # Clean text
-        print("Cleaning text data...")
         df['clean_input'] = df[input_col].apply(clean_text)
         df['clean_response'] = df[response_col].apply(clean_text)
         
-        # Remove rows with empty inputs or responses
         df = df[df['clean_input'].str.len() > 0]
         df = df[df['clean_response'].str.len() > 0]
         
-        # Create conversation pairs
-        conversations = []
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating conversation pairs"):
-            conversations.append({
-                'input': row['clean_input'],
-                'response': row['clean_response']
-            })
+        conversations = [
+            {'input': row['clean_input'], 'response': row['clean_response']}
+            for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Processing {file_path}")
+        ]
         
-        print(f"Processed {len(conversations)} conversation pairs")
+        print(f"Processed {len(conversations)} conversation pairs from {file_path}")
         return conversations
     
     except Exception as e:
-        print(f"Error preprocessing dataset: {e}")
-        return None
-
-def preprocess_genz_dataset(file_path):
-    """
-    Preprocess the Gen Z conversation dataset.
-    """
-    print(f"Preprocessing {file_path}...")
-    
-    try:
-        # Load dataset
-        df = pd.read_csv(file_path)
-        
-        # Check if required columns exist
-        required_columns = ['input', 'response']
-        if not all(col in df.columns for col in required_columns):
-            print(f"Error: Dataset missing required columns. Found: {df.columns.tolist()}")
-            return None
-        
-        # Clean text
-        print("Cleaning text data...")
-        df['clean_input'] = df['input'].apply(clean_text)
-        df['clean_response'] = df['response'].apply(clean_text)
-        
-        # Remove rows with empty inputs or responses
-        df = df[df['clean_input'].str.len() > 0]
-        df = df[df['clean_response'].str.len() > 0]
-        
-        # Create conversation pairs
-        conversations = []
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Creating conversation pairs"):
-            conversations.append({
-                'input': row['clean_input'],
-                'response': row['clean_response']
-            })
-        
-        print(f"Processed {len(conversations)} conversation pairs")
-        return conversations
-    
-    except Exception as e:
-        print(f"Error preprocessing dataset: {e}")
+        print(f"Error processing {file_path}: {e}")
         return None
 
 def combine_datasets(datasets):
@@ -205,141 +113,82 @@ def combine_datasets(datasets):
     Uses batch processing for memory efficiency.
     """
     combined = []
-    batch_size = 5000  # Process 5000 conversations at a time
-    
+    batch_size = 5000  # Process in chunks
+
     for dataset in datasets:
         if dataset:
             for i in range(0, len(dataset), batch_size):
-                batch = dataset[i:i+batch_size]
-                combined.extend(batch)
-                
-                # Free memory periodically
-                if i % (batch_size * 5) == 0:
-                    gc.collect()
-    
-    print(f"Combined dataset contains {len(combined)} conversation pairs")
+                combined.extend(dataset[i:i+batch_size])
+                gc.collect()
+
+    print(f"Final dataset contains {len(combined)} conversation pairs")
     return combined
 
 def save_processed_data(data, output_path):
     """
     Save processed data to a CSV file.
     """
+    if not data:
+        print(f"Skipping save: No data for {output_path}")
+        return
+    
     df = pd.DataFrame(data)
     df.to_csv(output_path, index=False)
     print(f"Saved processed data to {output_path}")
 
-def create_train_val_test_split(data, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1, is_genz=False):
+def create_train_val_test_split(data, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     """
     Split the dataset into training, validation, and test sets.
-    Uses batch processing for memory efficiency.
-    For Gen Z dataset, ensures proportional distribution across all splits.
     """
-    # Validate ratios
     if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-9:
         raise ValueError("Split ratios must sum to 1.0")
     
-    # Calculate split indices
-    total_size = len(data)
-    train_end = int(total_size * train_ratio)
-    val_end = train_end + int(total_size * val_ratio)
+    np.random.shuffle(data)
     
-    # Process in batches
-    batch_size = 5000
-    train_data, val_data, test_data = [], [], []
+    train_end = int(len(data) * train_ratio)
+    val_end = train_end + int(len(data) * val_ratio)
     
-    # For Gen Z dataset, ensure proportional distribution
-    if is_genz:
-        # Shuffle data to ensure random distribution while maintaining proportions
-        indices = list(range(total_size))
-        np.random.shuffle(indices)
-        
-        # Calculate target sizes for each split
-        train_size = int(total_size * train_ratio)
-        val_size = int(total_size * val_ratio)
-        
-        for i in tqdm(range(0, total_size, batch_size), desc="Splitting Gen Z dataset"):
-            batch_indices = indices[i:i+batch_size]
-            batch = [data[idx] for idx in batch_indices]
-            
-            for j, item in enumerate(batch):
-                if len(train_data) < train_size:
-                    train_data.append(item)
-                elif len(val_data) < val_size:
-                    val_data.append(item)
-                else:
-                    test_data.append(item)
-            
-            # Free memory periodically
-            if i % (batch_size * 5) == 0:
-                gc.collect()
-    else:
-        # Original splitting logic for non-Gen Z datasets
-        for i in tqdm(range(0, total_size, batch_size), desc="Splitting dataset"):
-            batch = data[i:i+batch_size]
-            batch_start = i
-            batch_end = i + len(batch)
-            
-            if batch_end <= train_end:
-                train_data.extend(batch)
-            elif batch_start >= train_end and batch_end <= val_end:
-                val_data.extend(batch)
-            elif batch_start >= val_end:
-                test_data.extend(batch)
-            else:
-                for j, item in enumerate(batch):
-                    if i + j < train_end:
-                        train_data.append(item)
-                    elif i + j < val_end:
-                        val_data.append(item)
-                    else:
-                        test_data.append(item)
-            
-            # Free memory periodically
-            if i % (batch_size * 5) == 0:
-                gc.collect()
+    train_data = data[:train_end]
+    val_data = data[train_end:val_end]
+    test_data = data[val_end:]
     
     print(f"Data split: Train={len(train_data)}, Validation={len(val_data)}, Test={len(test_data)}")
     return train_data, val_data, test_data
 
 if __name__ == "__main__":
-    # Define file paths
+    print("\n🔄 Starting Preprocessing...\n")
+
+    # Define file paths from `download_dataset.py`
     data_dir = os.path.dirname(os.path.abspath(__file__))
-    mental_health_path = os.path.join(data_dir, "mental_health_conversational.csv")
-    reddit_path = os.path.join(data_dir, "reddit_mental_health_support.csv")
-    genz_path = os.path.join(data_dir, "genz_conversations_processed.csv")
-    
-    # Check if at least one dataset exists
-    if not os.path.exists(mental_health_path) and not os.path.exists(reddit_path) and not os.path.exists(genz_path):
-        print("Error: No datasets found. Please run download_dataset.py and download_genz_dataset.py first.")
-        exit(1)
-    
-    # Preprocess datasets
-    mental_health_data = None
-    reddit_data = None
-    genz_data = None
-    
-    if os.path.exists(mental_health_path):
-        mental_health_data = preprocess_mental_health_dataset(mental_health_path)
-    
-    if os.path.exists(reddit_path):
-        reddit_data = preprocess_reddit_dataset(reddit_path)
-    
-    if os.path.exists(genz_path):
-        genz_data = preprocess_genz_dataset(genz_path)
-    
+    data_subdir = os.path.join(data_dir, "data")
+    dataset_paths = {
+        "mental_health_conversational": os.path.join(data_subdir, "mental_health_conversational.csv"),
+        "mental_health_counseling": os.path.join(data_subdir, "mental_health_counseling_conversations.csv"),
+        "mental_health_rated": os.path.join(data_subdir, "mental_health_counseling_rated.csv"),
+        "psychology": os.path.join(data_subdir, "psychology_dataset.csv")
+    }
+
+    # Preprocess all datasets
+    datasets = {
+        "mental_health_conversational": preprocess_dataset(dataset_paths["mental_health_conversational"], "text", None),
+        "mental_health_counseling": preprocess_dataset(dataset_paths["mental_health_counseling"], "Context", "Response"),
+        "mental_health_rated": preprocess_dataset(dataset_paths["mental_health_rated"], "context", "response"),
+        "psychology": preprocess_dataset(dataset_paths["psychology"], "question", "response_j")
+    }
+
     # Combine datasets
-    combined_data = combine_datasets([mental_health_data, reddit_data, genz_data])
-    
+    combined_data = combine_datasets(list(datasets.values()))
+
     if combined_data:
-        # Create data splits with proportional Gen Z distribution
-        train_data, val_data, test_data = create_train_val_test_split(combined_data, is_genz=True if genz_data else False)
-        
-        # Save processed data
+        # Split dataset into train/val/test
+        train_data, val_data, test_data = create_train_val_test_split(combined_data)
+
+        # Save processed datasets
         save_processed_data(train_data, os.path.join(data_dir, "train.csv"))
         save_processed_data(val_data, os.path.join(data_dir, "val.csv"))
         save_processed_data(test_data, os.path.join(data_dir, "test.csv"))
-        
-        print("\nData preprocessing complete!")
-        print("Next step: Run 'python model/train.py' to fine-tune the DialoGPT model")
+
+        print("\n✅ Data preprocessing complete!")
+        print("Next step: Run `python model/finetune_zephyr.py` to fine-tune Zephyr-7B Beta.")
     else:
-        print("\nError: Failed to preprocess datasets")
+        print("\n❌ Error: No datasets processed. Please check `download_dataset.py` output.")

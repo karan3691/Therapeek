@@ -1,110 +1,141 @@
 import os
-import sys
+import gc
+import torch
+import psutil
+import platform
 import argparse
 import subprocess
-import torch
-import gc
 from pathlib import Path
 
-# Create necessary directories
-os.makedirs(os.path.dirname(os.path.abspath(__file__)), exist_ok=True)
-
 def optimize_memory():
-    """Optimize memory usage for machines with limited RAM."""
-    gc.collect()
+    """Optimize memory usage for machines with limited RAM (8GB).
+    Implements extremely aggressive memory management techniques for MacBooks.
+    Specifically tuned for Zephyr-7B model conversion.
+    """
+    gc.collect(2)  # Full collection including oldest generation
+    
+    # Clear GPU/MPS cache based on device availability
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+        torch.cuda.set_per_process_memory_fraction(0.5)  # More restrictive GPU memory limit
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+        # Apple Silicon specific optimizations
+        if platform.system() == "Darwin" and platform.processor() == "arm":
+            torch.mps.set_per_process_memory_fraction(0.4)  # More conservative for M1/M2
+    
+    # Monitor memory usage
+    process = psutil.Process(os.getpid())
+    current_memory = process.memory_info().rss / 1024 / 1024
+    print(f"Current memory usage: {current_memory:.2f} MB")
+    
+    # Aggressive cleanup if memory usage is high
+    if current_memory > 3000:  # Lower threshold for earlier intervention
+        print("WARNING: High memory usage detected. Performing aggressive cleanup...")
+        for i in range(3):
+            gc.collect(i)
+        
+        # Device-specific cache clearing
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.set_per_process_memory_fraction(0.4)  # Further restrict GPU memory
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            if platform.system() == "Darwin" and platform.processor() == "arm":
+                torch.mps.set_per_process_memory_fraction(0.3)  # Even more conservative
+        
+        # macOS specific memory optimization
+        if platform.system() == "Darwin":
+            try:
+                import ctypes
+                lib = ctypes.CDLL("libSystem.B.dylib")
+                lib.malloc_trim(0)
+            except Exception as e:
+                print(f"Warning: macOS memory optimization failed: {e}")
+        
+        # Critical memory situation
+        if current_memory > 4500:  # Lower threshold for critical action
+            print("CRITICAL: Memory usage extremely high. Taking emergency measures...")
+            import time
+            time.sleep(5)  # Longer pause to ensure memory is freed
+            gc.collect(2)
+            
+            # Disable gradient calculation temporarily if extremely high
+            if torch.is_grad_enabled():
+                print("EMERGENCY: Temporarily disabling gradient calculation")
+                torch.set_grad_enabled(False)
+                time.sleep(1)
+                torch.set_grad_enabled(True)
+
+def convert_to_gguf(model_path, output_path, quantization='q4_0'):
+    """Convert a fine-tuned Zephyr model to GGUF format.
+    
+    Args:
+        model_path: Path to the fine-tuned model directory
+        output_path: Path for the output GGUF file
+        quantization: Quantization type (q4_0, q4_1, q5_0, q5_1, q8_0)
+    
+    Returns:
+        bool: True if conversion was successful, False otherwise
+    """
+    print(f"Converting model from {model_path} to GGUF format...")
+    print(f"Output path: {output_path}")
+    print(f"Quantization: {quantization}")
+    
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Run the conversion command
+    cmd = [
+        "python", "-m", "llama_cpp.convert_hf_to_gguf",
+        "--outfile", output_path,
+        "--outtype", quantization,
+        model_path
+    ]
+    
+    print(f"Running command: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    # Print output for debugging
+    if result.stdout:
+        print("Command output:")
+        print(result.stdout)
+    
+    if result.stderr:
+        print("Command errors:")
+        print(result.stderr)
+    
+    if result.returncode == 0:
+        optimize_memory()  # Call memory optimization after successful conversion
+        print(f"Successfully converted model to GGUF format at {output_path}")
+        print(f"GGUF file size: {os.path.getsize(output_path) / (1024 * 1024):.2f} MB")
+        return True
+    else:
+        print(f"Failed to convert model to GGUF format. Error code: {result.returncode}")
+        return False
 
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Convert fine-tuned Zephyr model to GGUF format')
-    parser.add_argument('--model_path', type=str, default='output/zephyr_3b_finetuned',
+    parser.add_argument('--model_path', type=str, default='output/zephyr_7b_finetuned',
                         help='Path to the fine-tuned model directory')
-    parser.add_argument('--output_path', type=str, default='zephyr-3b-q4.gguf',
+    parser.add_argument('--output_path', type=str, default='zephyr-7b-q4.gguf',
                         help='Path for the output GGUF file')
     parser.add_argument('--quantization', type=str, default='q4_0',
                         help='Quantization type (q4_0, q4_1, q5_0, q5_1, q8_0)')
     return parser.parse_args()
 
-def convert_to_gguf(model_path, output_path, quant_type='q4_0'):
-    """Convert the fine-tuned model to GGUF format for use with llama.cpp."""
-    print(f"Converting model from {model_path} to GGUF format...")
-    
-    # Verify model path exists
-    if not os.path.exists(model_path):
-        print(f"Error: Model directory not found at {model_path}")
-        return False
-    
-    try:
-        # Use llama.cpp's conversion script
-        cmd = [
-            "python", "-m", "llama_cpp.convert_hf_to_gguf",
-            model_path,
-            "--outfile", output_path,
-            "--outtype", quant_type
-        ]
-        
-        print(f"Running command: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print(f"Successfully converted model to GGUF format at {output_path}")
-            print(f"GGUF file size: {Path(output_path).stat().st_size / (1024 * 1024):.2f} MB")
-            return True
-        else:
-            print(f"Error converting model: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"Exception during model conversion: {str(e)}")
-        return False
-
-def verify_gguf_model(model_path):
-    """Verify the GGUF model can be loaded with llama.cpp."""
-    try:
-        from llama_cpp import Llama
-        print(f"Verifying GGUF model at {model_path}...")
-        
-        # Try to load the model with minimal settings
-        model = Llama(model_path=model_path, n_ctx=512, n_threads=1)
-        
-        # Test with a simple prompt
-        test_prompt = "<|user|>\nHello, how are you?<|assistant|>\n"
-        response = model(test_prompt, max_tokens=10)
-        
-        print(f"Model verification successful. Sample response: {response['choices'][0]['text']}")
-        return True
-    except Exception as e:
-        print(f"Error verifying GGUF model: {str(e)}")
-        return False
-
 def main():
-    """Main function to convert model to GGUF format."""
+    """Main function to run the conversion process."""
     args = parse_arguments()
-    
-    # Resolve paths
-    model_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(model_dir, args.model_path)
-    output_path = os.path.join(model_dir, args.output_path)
-    
-    # Convert model to GGUF format
-    success = convert_to_gguf(model_path, output_path, args.quantization)
-    
-    if success:
-        # Verify the converted model
-        verify_success = verify_gguf_model(output_path)
-        if verify_success:
-            print("\nModel conversion and verification complete!")
-            print(f"The 4-bit quantized GGUF model is ready at: {output_path}")
-            print("Next step: Run 'python api/app.py' to start the FastAPI server")
-        else:
-            print("\nModel conversion succeeded but verification failed.")
-    else:
-        print("\nModel conversion failed.")
-    
-    # Clean up memory
-    optimize_memory()
-    
+    success = convert_to_gguf(
+        model_path=args.model_path,
+        output_path=args.output_path,
+        quantization=args.quantization
+    )
     return 0 if success else 1
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit(main())

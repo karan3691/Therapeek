@@ -20,9 +20,9 @@ def optimize_memory():
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Upload TheraPeek model to Hugging Face Hub')
-    parser.add_argument('--model_path', type=str, default='../model/zephyr-3b-q4.gguf',
+    parser.add_argument('--model_path', type=str, default='../model/zephyr-7b-q4.gguf',
                         help='Path to the quantized GGUF model')
-    parser.add_argument('--repo_name', type=str, default='therapeek-zephyr-3b-q4',
+    parser.add_argument('--repo_name', type=str, default='therapeek-zephyr-7b-q4',
                         help='Name for the Hugging Face repository')
     parser.add_argument('--hf_token', type=str, required=True,
                         help='Hugging Face API token')
@@ -52,7 +52,7 @@ def prepare_model_for_upload(model_path, temp_dir):
 # TheraPeek - Gen Z Mental Health Chatbot
 
 ## Model Description
-This is a fine-tuned and quantized version of Zephyr-3B optimized for mental health conversations with Gen Z users. 
+This is a fine-tuned and quantized version of Zephyr-7B Beta optimized for mental health conversations with Gen Z users. 
 The model is specifically designed to run efficiently on MacBooks with limited RAM (8GB).
 
 ## Features
@@ -67,7 +67,7 @@ The model is specifically designed to run efficiently on MacBooks with limited R
 from llama_cpp import Llama
 
 # Load the model
-model = Llama(model_path="zephyr-3b-q4.gguf", n_ctx=2048, n_threads=4)
+model = Llama(model_path="zephyr-7b-q4.gguf", n_ctx=2048, n_threads=4)
 
 # Generate a response
 response = model("User: I've been feeling really anxious lately\nAssistant:", max_tokens=150)
@@ -93,7 +93,7 @@ This model is for research purposes only. Please use responsibly and ethically f
             "group_size": 128,
             "desc": "4-bit quantized GGUF format for llama.cpp"
         },
-        "model_name": "therapeek-zephyr-3b-q4",
+        "model_name": "therapeek-zephyr-7b-q4",
         "language": ["en"],
         "license": "mit",
         "tags": ["mental-health", "gen-z", "chatbot", "llama.cpp", "quantized"]

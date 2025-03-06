@@ -24,14 +24,11 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Grab current time (HH:MM)
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // Create user message
     const userMessage = {
       id: Date.now(),
       sender: 'user',
@@ -42,20 +39,48 @@ function App() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setShowReadReceipt(false);
-
-    // Simulate "typing" indicator for 1.5s before bot replies
     setTyping(true);
-    setTimeout(() => {
+
+    try {
+      const response = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input.trim(),
+          conversation_id: userMessage.id.toString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from bot');
+      }
+
+      const data = await response.json();
       setTyping(false);
       setShowReadReceipt(true);
+
       const botReply = {
         id: Date.now() + 1,
         sender: 'bot',
-        text: 'This is a bot reply!',
+        text: data.response,
+        emotion: data.emotion,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
+
       setMessages((prev) => [...prev, botReply]);
-    }, 1500);
+    } catch (error) {
+      console.error('Error:', error);
+      setTyping(false);
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: 'Sorry, I had trouble processing your message. Please try again.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        error: true
+      }]);
+    }
   };
 
   return (
